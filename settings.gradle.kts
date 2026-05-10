@@ -16,6 +16,8 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
     }
+    versionCatalogs {
+    }
 }
 
 rootProject.name = "TubeShield"
