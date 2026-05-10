@@ -2,7 +2,6 @@ package com.tubesheild
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.view.View
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -13,12 +12,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var urlBar: EditText
-    private lateinit var torIndicator: TextView
 
     companion object {
-        const val TOR_PROXY = "127.0.0.1"
-        const val TOR_PORT = 9050
-        const val HOME_PAGE = "https://invidious.fdn.fr" // Private YouTube
+        const val HOME_PAGE = "https://invidious.fdn.fr"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -27,10 +23,6 @@ class MainActivity : AppCompatActivity() {
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
         }
 
         // Top bar
@@ -39,10 +31,10 @@ class MainActivity : AppCompatActivity() {
             setPadding(8, 8, 8, 8)
         }
 
-        torIndicator = TextView(this).apply {
-            text = "🧅 Tor ON"
-            setTextColor(0xFF00FF00.toInt())
-            textSize = 12f
+        val torLabel = TextView(this).apply {
+            text = "🧅 Herax"
+            setTextColor(0xFF00CC66.toInt())
+            textSize = 14f
             setPadding(0, 0, 8, 0)
         }
 
@@ -52,17 +44,17 @@ class MainActivity : AppCompatActivity() {
             textSize = 14f
         }
 
-        val goButton = Button(this).apply {
+        val goBtn = Button(this).apply {
             text = "Go"
-            textSize = 14f
+            textSize = 12f
             setOnClickListener { loadUrl(urlBar.text.toString()) }
         }
 
-        topBar.addView(torIndicator)
+        topBar.addView(torLabel)
         topBar.addView(urlBar)
-        topBar.addView(goButton)
+        topBar.addView(goBtn)
 
-        // WebView with Tor proxy
+        // WebView
         webView = WebView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -77,32 +69,37 @@ class MainActivity : AppCompatActivity() {
                 useWideViewPort = true
                 loadWithOverviewMode = true
                 setSupportZoom(true)
-
-                // Route through Tor
-                setProxy(
-                    ProxyConfig.Builder()
-                        .addProxyRule("$TOR_PROXY:$TOR_PORT")
-                        .addDirect()
-                        .build()
-                )
             }
 
-            webViewClient = HeraxClient()
+            webViewClient = object : WebViewClient() {
+
+                private val blocked = listOf(
+                    "doubleclick.net", "googleadservices.com", "googlesyndication.com",
+                    "google-analytics.com", "googletagmanager.com", "facebook.com/tr",
+                    "amazon-adsystem.com", "scorecardresearch.com", "outbrain.com",
+                    "taboola.com", "criteo.com", "adnxs.com", "adsrvr.org"
+                )
+
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): Boolean {
+                    return blocked.any { request.url.toString().contains(it) }
+                }
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    urlBar.setText(url)
+                    view.evaluateJavascript(CLEANER_SCRIPT, null)
+                    view.evaluateJavascript(FINGERPRINT_SCRIPT, null)
+                }
+            }
+
             loadUrl(HOME_PAGE)
         }
 
         layout.addView(topBar)
         layout.addView(webView)
         setContentView(layout)
-
-        // Inject cleaner every page load
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView, url: String) {
-                view.evaluateJavascript(CLEANER_SCRIPT, null)
-                view.evaluateJavascript(FINGERPRINT_SCRIPT, null)
-                urlBar.setText(url)
-            }
-        }
     }
 
     private fun loadUrl(url: String) {
@@ -116,63 +113,41 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        webView.evaluateJavascript(SESSION_CLEAR_SCRIPT, null)
+        webView.evaluateJavascript(SESSION_CLEAR, null)
         super.onDestroy()
     }
-}
 
-// ─── WebView Client ───────────────────────────────
+    companion object Scripts {
+        const val CLEANER_SCRIPT = """
+        (function(){var k=function(){
+        ['ytd-display-ad-renderer','.ytp-ad-module','ytd-promoted-video-renderer',
+        '#masthead-ad','.ytd-banner-promo-renderer','.ytp-ad-overlay-container']
+        .forEach(function(s){document.querySelectorAll(s).forEach(function(e){e.remove()})});
+        var skip=document.querySelector('.ytp-ad-skip-button,.ytp-ad-skip-button-modern');
+        if(skip)skip.click();
+        var v=document.querySelector('video');
+        if(v&&document.querySelector('.ytp-ad-player-overlay')){v.playbackRate=16;v.muted=true}
+        };k();setInterval(k,300);
+        new MutationObserver(k).observe(document.body,{childList:true,subtree:true});
+        document.cookie='CONSENT=YES+; domain=.youtube.com; path=/';})();
+        """
 
-class HeraxClient : WebViewClient() {
+        const val FINGERPRINT_SCRIPT = """
+        (function(){
+        Object.defineProperty(navigator,'deviceMemory',{get:function(){return 8}});
+        Object.defineProperty(navigator,'hardwareConcurrency',{get:function(){return 8}});
+        Object.defineProperty(navigator,'platform',{get:function(){return 'Linux x86_64'}});
+        Object.defineProperty(navigator,'plugins',{get:function(){return [1,2,3,4,5]}});
+        })();
+        """
 
-    private val blocked = listOf(
-        "doubleclick.net", "googleadservices.com", "googlesyndication.com",
-        "google-analytics.com", "googletagmanager.com", "facebook.com/tr",
-        "amazon-adsystem.com", "scorecardresearch.com", "outbrain.com",
-        "taboola.com", "criteo.com", "adnxs.com", "adsrvr.org"
-    )
-
-    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-        return blocked.any { request.url.toString().contains(it) }
+        const val SESSION_CLEAR = """
+        (function(){
+        document.cookie.split(';').forEach(function(c){
+        document.cookie=c.split('=')[0]+'=;expires=Thu,01 Jan 1970 00:00:00 GMT;path=/';
+        });
+        try{localStorage.clear();sessionStorage.clear()}catch(e){}
+        })();
+        """
     }
 }
-
-// ─── Injected Scripts ─────────────────────────────
-
-const val CLEANER_SCRIPT = """
-(function() {
-    const kill = () => {
-        ['ytd-display-ad-renderer','.ytp-ad-module','.ytp-ad-overlay-container',
-         'ytd-promoted-video-renderer','#masthead-ad','.ytd-banner-promo-renderer']
-        .forEach(s => document.querySelectorAll(s).forEach(e => e.remove()));
-        const skip = document.querySelector('.ytp-ad-skip-button');
-        if(skip) skip.click();
-        const v = document.querySelector('video');
-        if(v && document.querySelector('.ytp-ad-player-overlay')) {
-            v.playbackRate = 16; v.muted = true;
-        }
-    };
-    kill();
-    setInterval(kill, 300);
-    new MutationObserver(kill).observe(document.body, {childList:true,subtree:true});
-    document.cookie = 'CONSENT=YES+; domain=.youtube.com; path=/';
-})();
-"""
-
-const val FINGERPRINT_SCRIPT = """
-(function() {
-    Object.defineProperty(navigator, 'deviceMemory', {get:()=>8});
-    Object.defineProperty(navigator, 'hardwareConcurrency', {get:()=>8});
-    Object.defineProperty(navigator, 'platform', {get:()=>'Linux x86_64'});
-    Object.defineProperty(navigator, 'plugins', {get:()=>[1,2,3,4,5]});
-})();
-"""
-
-const val SESSION_CLEAR_SCRIPT = """
-(function() {
-    document.cookie.split(';').forEach(c => {
-        document.cookie = c.split('=')[0]+'=;expires=Thu,01 Jan 1970 00:00:00 GMT;path=/';
-    });
-    try { localStorage.clear(); sessionStorage.clear(); } catch(e) {}
-})();
-"""
