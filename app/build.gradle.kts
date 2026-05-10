@@ -1,6 +1,7 @@
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // We specify the versions here to ensure they are compatible with Gradle 9.4.1
+    id("com.android.application") version "8.7.0"
+    id("org.jetbrains.kotlin.android") version "1.9.24"
 }
 
 android {
@@ -30,7 +31,7 @@ android {
         }
     }
 
-    // FIXED: Modern packaging block to prevent mutation errors
+    // Modern packaging block fixes the "Mutation" error
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
