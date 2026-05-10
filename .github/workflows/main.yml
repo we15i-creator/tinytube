@@ -3,9 +3,7 @@ name: Build APK
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,23 +19,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: ${{ runner.os }}-gradle
+          gradle-version: 8.5
 
-      - name: Make Gradle executable
-        run: chmod +x gradlew
+      - name: Generate Gradle wrapper if missing
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.5
+            chmod +x gradlew
+          fi
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Build release APK
-        run: ./gradlew assembleRelease
+      - name: Build APK
+        run: ./gradlew assembleDebug assembleRelease
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
