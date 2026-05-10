@@ -54,16 +54,17 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        enableImmersiveMode()
-        
-        // Initialize AudioManager early
+        // FIX: Initialize AudioManager before anything else
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         
-        // Create WebView with application context to avoid leaks
+        // FIX: Create WebView and set content FIRST
         webView = WebView(this)
         setContentView(webView)
+        
+        // FIX: NOW enable immersive mode after setContentView()
+        enableImmersiveMode()
 
-        // Modern WebView settings
+        // WebView settings
         webView?.settings?.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -79,27 +80,21 @@ class MainActivity : AppCompatActivity() {
             loadsImagesAutomatically = true
         }
 
-        // Cookie manager
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
             setAcceptThirdPartyCookies(webView, true)
         }
 
-        // Enable debugging
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             WebView.setWebContentsDebuggingEnabled(true)
         }
 
-        // JS Interface
         webView?.addJavascriptInterface(WebAppInterface(this), "TubeShield")
-
         webView?.webViewClient = TubeShieldWebViewClient()
         webView?.webChromeClient = TubeShieldWebChromeClient()
 
-        // Load YouTube
         webView?.loadUrl("https://www.youtube.com/?theme=dark&hl=en")
         
-        // Start foreground service safely
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(Intent(this, BackgroundPlaybackService::class.java))
@@ -111,18 +106,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // FIX: Safe immersive mode that works before/after decor view
     private fun enableImmersiveMode() {
+        // Method 1: Android 11+ (R) - safe after setContentView
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.let {
-                it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            try {
+                window.insetsController?.let {
+                    it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                    it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            } catch (e: Exception) {
+                // Fallback if insetsController is null
+                enableImmersiveLegacy()
             }
         } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_FULLSCREEN)
+            // Method 2: Legacy flags - works on all API levels
+            enableImmersiveLegacy()
         }
+    }
+
+    // FIX: Legacy immersive mode using deprecated but reliable flags
+    @Suppress("DEPRECATION")
+    private fun enableImmersiveLegacy() {
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        )
     }
 
     // ==================== AUDIO FOCUS ====================
@@ -234,7 +247,6 @@ class MainActivity : AppCompatActivity() {
             
             requestAudioFocus()
             
-            // Inject scripts with delay to ensure DOM is ready
             view.postDelayed({
                 if (!isDestroyed) {
                     view.evaluateJavascript(ULTRA_ADBLOCK_SCRIPT, null)
@@ -246,7 +258,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: android.net.http.SslError) {
-            // SAFETY: Don't show dialog if activity is finishing
             if (isFinishing || isDestroyed) {
                 handler.cancel()
                 return
@@ -335,12 +346,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== LIFECYCLE - FIXED ====================
+    // ==================== LIFECYCLE ====================
 
     override fun onPause() {
         super.onPause()
-        // FIXED: Don't call onPause/onResume on WebView - it crashes
-        // Background playback is handled by JS injection, not lifecycle hacks
     }
 
     override fun onResume() {
@@ -351,7 +360,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Background playback continues via service + JS
     }
 
     override fun onDestroy() {
@@ -364,7 +372,6 @@ class MainActivity : AppCompatActivity() {
             Log.e("TubeShield", "Stop service error: ${e.message}")
         }
         
-        // Safe WebView destroy
         webView?.let { wv ->
             wv.stopLoading()
             wv.loadUrl("about:blank")
