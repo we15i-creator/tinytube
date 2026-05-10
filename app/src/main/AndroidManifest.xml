@@ -11,7 +11,8 @@
         android:icon="@android:drawable/ic_media_play"
         android:label="TubeShield"
         android:roundIcon="@android:drawable/ic_media_play"
-        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+        android:theme="@style/Theme.AppCompat.NoActionBar"
+        android:hardwareAccelerated="true">
 
         <activity
             android:name=".MainActivity"
@@ -19,21 +20,12 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:launchMode="singleTask"
             android:resizeableActivity="true"
-            android:supportsPictureInPicture="true">
+            android:supportsPictureInPicture="true"
+            android:hardwareAccelerated="true">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="www.youtube.com" />
-                <data android:scheme="https" android:host="youtube.com" />
-                <data android:scheme="https" android:host="m.youtube.com" />
-                <data android:scheme="https" android:host="youtu.be" />
             </intent-filter>
         </activity>
 
